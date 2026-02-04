@@ -23,7 +23,9 @@ class ScheduleEngine:
             now = datetime.now()
         
         current_time = now.time()
-        current_day = now.strftime("%a") # Mon, Tue, etc.
+        # use weekday() -> 0: Mon, 1: Tue... 6: Sun
+        days_map = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
+        current_day = days_map[now.weekday()]
         
         # 1. ALWAYS PRIORITIZE MANUAL OVERRIDE
         # We reload here to ensure current state is fresh

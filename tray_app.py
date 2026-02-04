@@ -149,11 +149,9 @@ class TrayApp:
         self.config_store.reload()
         cfg = self.config_store.config
         
-        # 1. Sync device connection status primarily for Dashboard
+        # 1. Update in-memory device status ONLY
         dev_status = self.device_manager.get_connection_status()
-        if cfg.get("device_status") != dev_status:
-            cfg["device_status"] = dev_status
-            self.config_store.save_config()
+        self.config_store.set("device_status", dev_status)
 
         # 2. Determine desired state
         current_override = str(cfg.get("manual_override", "none")).lower()

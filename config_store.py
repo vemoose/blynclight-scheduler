@@ -27,6 +27,7 @@ class ConfigStore:
         self.config_path = self.config_dir / config_name
         self.log_path = self.config_dir / "app.log"
         self.last_mtime = 0
+        self.runtime_status = {} # In-memory only!
         self.config = self.load_config()
 
     def load_config(self):
@@ -65,13 +66,24 @@ class ConfigStore:
             logging.error(f"Failed to save config: {e}")
 
     def get(self, key, default=None):
+        # Check runtime-only memory first (for device status)
+        if key in self.runtime_status:
+            return self.runtime_status[key]
+            
         self.reload()
         return self.config.get(key, default)
 
     def set(self, key, value):
+        # Don't save transient device status to disk!
+        # This prevents the 'sharing violation' file-lock on startup
+        if key in ["device_status", "last_polling_time"]:
+            self.runtime_status[key] = value
+            return
+
         self.reload() # Get latest before applying
-        self.config[key] = value
-        self.save_config()
+        if self.config.get(key) != value:
+            self.config[key] = value
+            self.save_config()
 
     def reload(self):
         if not self.config_path.exists():

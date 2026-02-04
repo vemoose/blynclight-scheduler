@@ -15,6 +15,11 @@ def is_already_running():
         return s.connect_ex(('localhost', LOCK_PORT)) == 0
 
 def main():
+    # Warm-up delay: Give Windows a moment to settle on boot
+    import time
+    if "--settings" not in sys.argv:
+        time.sleep(5)
+
     # 1. Initialize Config and Logging
     config_store = ConfigStore()
     config_store.setup_logging()
