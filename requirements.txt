@@ -1,0 +1,6 @@
+pystray
+Pillow
+hidapi
+blynclight
+pywebview
+pyinstaller

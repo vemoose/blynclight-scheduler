@@ -1,0 +1,9 @@
+2026-02-01 21:48:14,217 - INFO - Blynclight Scheduler Starting...
+2026-02-01 21:48:14,293 - INFO - Starting schedule main loop
+2026-02-01 21:48:14,293 - ERROR - blynclight library not installed.
+2026-02-01 21:48:14,294 - INFO - No physical Blynclight found. Starting Simulator Mode.
+2026-02-01 21:48:14,294 - INFO - Connected to Simulated Blynclight
+2026-02-01 21:48:14,295 - INFO - Changing status: None -> blue
+2026-02-01 21:48:14,295 - INFO - SIMULATOR: Light color set to blue (0, 0, 255)
+2026-02-02 08:54:40,168 - INFO - Changing status: blue -> red
+2026-02-02 08:54:40,169 - INFO - SIMULATOR: Light color set to red (255, 0, 0)
