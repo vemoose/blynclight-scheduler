@@ -20,6 +20,8 @@ class TrayApp:
         self.running = True
         self.icon = None
         self.is_mac = platform.system() == "Darwin"
+        self.first_run = True
+        self.startup_time = time.time()
 
     def create_image(self, color="gray"):
         # Super-sampled size for high-fidelity rendering
@@ -76,8 +78,23 @@ class TrayApp:
 
     def is_override_active(self, item):
         """Callback for pystray to determine if 'Resume Schedule' should be shown."""
+        # Mapping labels to internal states
+        cmap = {
+            "red": "focused", 
+            "green": "open", 
+            "blue": "away",
+            "open window": "open",
+            "closed window": "focused"
+        }
         ov = self.config_store.config.get("manual_override")
-        active = ov is not None and str(ov).lower() != "none"
+        processed_ov = str(ov).lower() if ov is not None else "none"
+
+        # Apply mapping if the override value is one of the keys in cmap
+        if processed_ov in cmap:
+            processed_ov = cmap[processed_ov]
+            
+        # An override is active if it's not "none" or "null" after processing
+        active = processed_ov not in ["none", "null"]
         return active
 
     def setup_tray(self):
@@ -143,12 +160,14 @@ class TrayApp:
         desired_status = self.schedule_engine.get_desired_status()
         
         # 3. Update hardware and icons ONLY on actual transition
-        if desired_status != self.last_status:
-            logging.info(f"Transition: {self.last_status} -> {desired_status}")
+        # (Force update on first run to ensure sync)
+        if desired_status != self.last_status or self.first_run:
+            logging.info(f"Syncing State: {self.last_status} -> {desired_status}")
             self.device_manager.set_status_color(desired_status)
             self.last_status = desired_status
             if self.icon:
                 self.icon.icon = self.create_image(desired_status)
+            self.first_run = False
         
         # 4. Refresh menu context ONLY if override mode switched
         if current_override != self.last_override:
@@ -167,9 +186,13 @@ class TrayApp:
             except Exception as e:
                 logging.error(f"Error in main loop: {e}")
                 
-            # Efficient polling: Read once per loop
+            # Aggressive polling for the first minute of startup (every 1s)
+            # Then settle into configured poll time
+            is_startup = (time.time() - self.startup_time) < 60
+            
             poll_time = self.config_store.config.get("poll_seconds", 2)
-            time.sleep(max(1, poll_time))
+            sleep_duration = 1 if (is_startup or self.first_run) else max(1, poll_time)
+            time.sleep(sleep_duration)
 
     def run(self):
         self.setup_tray()

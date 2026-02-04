@@ -30,13 +30,21 @@ class ScheduleEngine:
         self.config_store.reload()
         override = self.config_store.config.get("manual_override")
         
-        # Mapping legacy names to new names
-        cmap = {"red": "focused", "green": "open", "blue": "away"}
-        if override in cmap:
-            override = cmap[override]
+        # Mapping labels to internal states
+        cmap = {
+            "red": "focused", 
+            "green": "open", 
+            "blue": "away",
+            "open window": "open",
+            "closed window": "focused"
+        }
+        
+        override_str = str(override).lower() if override is not None else "none"
+        if override_str in cmap:
+            override_str = cmap[override_str]
             
-        if override and override.lower() != "none":
-            return override.lower()
+        if override_str not in ["none", "null"]:
+            return override_str
 
         # 2. EVALUATE RULES
         settings = self.config_store.config
