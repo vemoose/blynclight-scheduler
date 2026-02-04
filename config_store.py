@@ -16,7 +16,7 @@ class ConfigStore:
             }
         ],
         "manual_override": None,
-        "poll_seconds": 30,
+        "poll_seconds": 2,
         "turn_off_on_exit": True,
         "start_on_login": False
     }
@@ -41,6 +41,10 @@ class ConfigStore:
                     cmap = {"red": "focused", "green": "open", "blue": "away"}
                     if ov in cmap:
                         content["manual_override"] = cmap[ov]
+                    
+                    # Migrate old polling interval for better reactivity
+                    if content.get("poll_seconds") == 30:
+                        content["poll_seconds"] = 2
                         
                     # Simple validation/merge
                     config = self.DEFAULT_CONFIG.copy()
@@ -65,6 +69,7 @@ class ConfigStore:
         return self.config.get(key, default)
 
     def set(self, key, value):
+        self.reload() # Get latest before applying
         self.config[key] = value
         self.save_config()
 

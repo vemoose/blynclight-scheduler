@@ -6,6 +6,7 @@ import sys
 import webbrowser
 from pathlib import Path
 from config_store import ConfigStore
+import system_utils
 
 PORT = 8989
 config_store = ConfigStore()
@@ -49,17 +50,24 @@ class SettingsHandler(http.server.SimpleHTTPRequestHandler):
         data = json.loads(self.rfile.read(length).decode())
 
         if self.path == "/save":
-            # 1. Reload existing config to get current manual_override
+            # 1. Reload existing config to get current manual_override and start_on_login
             config_store.reload()
             current_override = config_store.config.get("manual_override")
+            current_autostart = config_store.config.get("start_on_login", False)
             
             # 2. Update with new dashboard settings
+            new_autostart = data.get("start_on_login", False)
             config_store.config["default_state"] = data.get("default_state", "away")
             config_store.config["rules"] = data.get("rules", [])
+            config_store.config["start_on_login"] = new_autostart
             
             # 3. Explicitly preserve the override state (don't let dashboard wipe it)
             config_store.config["manual_override"] = current_override
             config_store.save_config()
+
+            # 4. Update system autostart if changed
+            if new_autostart != current_autostart:
+                system_utils.set_autostart(new_autostart)
             
         elif self.path == "/force":
             state = data.get("state")

@@ -308,6 +308,55 @@
             transform: scale(1.1);
         }
 
+        /* Toggle Switch */
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 34px;
+            height: 20px;
+        }
+
+        .switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #e2e8f0;
+            transition: .2s;
+            border-radius: 20px;
+            border: 1px solid #e2e8f0;
+        }
+
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 14px;
+            width: 14px;
+            left: 2px;
+            bottom: 2px;
+            background-color: white;
+            transition: .2s;
+            border-radius: 50%;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+
+        input:checked+.slider {
+            background-color: var(--focused);
+            border-color: var(--focused);
+        }
+
+        input:checked+.slider:before {
+            transform: translateX(14px);
+        }
+
         .btn-save {
             width: 100%;
             margin-top: 16px;
@@ -572,16 +621,32 @@
             <div id="rules-container" class="rules-list"></div>
             <button class="btn btn-add" onclick="addRule()">+ Add New Rule</button>
 
-            <!-- Inline Fallback -->
+            <!-- Inline Fallback & Startup -->
             <div
-                style="margin-top: 20px; padding-top: 16px; border-top: 1px solid #f1f5f9; display: flex; align-items: center; justify-content: space-between;">
-                <div style="display:flex; align-items:center; gap:12px;">
-                    <h3
-                        style="font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: #94a3b8; margin:0; font-weight: 700;">
-                        Fallback</h3>
-                    <span style="font-size: 12px; color: #94a3b8; font-weight: 500;">(When no rules match)</span>
+                style="margin-top: 20px; padding-top: 16px; border-top: 1px solid #f1f5f9; display: flex; flex-direction: column; gap: 16px;">
+                <div style="display: flex; align-items: center; justify-content: space-between;">
+                    <div style="display:flex; align-items:center; gap:12px;">
+                        <h3
+                            style="font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: #94a3b8; margin:0; font-weight: 700;">
+                            Fallback</h3>
+                        <span style="font-size: 12px; color: #94a3b8; font-weight: 500;">(When no rules match)</span>
+                    </div>
+                    <div id="fallback-select-container"></div>
                 </div>
-                <div id="fallback-select-container"></div>
+
+                <div style="display: flex; align-items: center; justify-content: space-between;">
+                    <div style="display:flex; align-items:center; gap:12px;">
+                        <h3
+                            style="font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: #94a3b8; margin:0; font-weight: 700;">
+                            General</h3>
+                        <span style="font-size: 12px; color: #94a3b8; font-weight: 500;">Launch at Startup</span>
+                    </div>
+                    <label class="switch">
+                        <input type="checkbox" id="startup-toggle"
+                            onchange="config.start_on_login = this.checked; render();">
+                        <span class="slider round"></span>
+                    </label>
+                </div>
             </div>
 
             <button class="btn btn-primary btn-save" onclick="saveConfig()" style="margin-top: 24px;">Save & Apply
@@ -737,6 +802,9 @@
                 render();
                 updateStatusDisplay();
             }));
+
+            // Sync Startup Toggle
+            document.getElementById('startup-toggle').checked = config.start_on_login;
 
             const container = document.getElementById('rules-container');
             container.innerHTML = '';
