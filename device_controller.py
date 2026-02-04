@@ -188,26 +188,29 @@ class DeviceManager:
         return self.controller is not None
 
     def set_color(self, r, g, b):
+        success = False
         if self.controller:
-            if not self.controller.set_color(r, g, b):
-                logging.warning("Light update failed, attempting reconnect...")
-                self.connect()
+            success = self.controller.set_color(r, g, b)
+            
+        if not success:
+            # Persistent retry if hardware fails (common on Windows boot)
+            logging.warning("Light update failed, attempting reconnect and retry...")
+            time.sleep(1) # Grace period
+            if self.connect():
                 if self.controller:
                     self.controller.set_color(r, g, b)
-        else:
-            if self.connect():
-                self.controller.set_color(r, g, b)
 
     def turn_off(self):
         if self.controller:
             self.controller.turn_off()
 
     def set_status_color(self, status):
-        if status == "green":
+        status = status.lower()
+        if status in ["open", "green"]:
             self.set_color(0, 255, 0)
-        elif status == "red":
+        elif status in ["focused", "red"]:
             self.set_color(255, 0, 0)
-        elif status == "blue":
+        elif status in ["away", "blue"]:
             self.set_color(0, 0, 255)
-        elif status == "off":
+        elif status in ["off"]:
             self.turn_off()

@@ -596,11 +596,11 @@
             <div style="display:flex; align-items: center; gap:12px; flex-wrap: wrap;">
                 <div class="segmented-control">
                     <button id="btn-open" class="seg-btn btn-force" data-state="open" onclick="forceState('open')">
-                        <i></i> Open
+                        <i></i> Open Window
                     </button>
                     <button id="btn-focused" class="seg-btn btn-force" data-state="focused"
                         onclick="forceState('focused')">
-                        <i></i> Focused
+                        <i></i> Closed Window
                     </button>
                     <button id="btn-away" class="seg-btn btn-force" data-state="away" onclick="forceState('away')">
                         <i></i> Away
@@ -734,8 +734,8 @@
         }
 
         const STATE_MAP = {
-            open: { label: 'Open', color: 'var(--open)', dot: '●' },
-            focused: { label: 'Focused', color: 'var(--focused)', dot: '●' },
+            open: { label: 'Open Window', color: 'var(--open)', dot: '●' },
+            focused: { label: 'Closed Window', color: 'var(--focused)', dot: '●' },
             away: { label: 'Away', color: 'var(--away)', dot: '●' },
             off: { label: 'Off', color: 'var(--text-sec)', dot: '○' }
         };
@@ -999,7 +999,8 @@
                 off: '#94a3b8'
             };
             const txt = document.getElementById('status-txt');
-            txt.innerText = (isManual ? "Manual: " : "Current Status: ") + status.charAt(0).toUpperCase() + status.slice(1);
+            const label = STATE_MAP[status] ? STATE_MAP[status].label : (status.charAt(0).toUpperCase() + status.slice(1));
+            txt.innerText = (isManual ? "Manual: " : "Current Status: ") + label;
             document.getElementById('status-dot').style.background = colors[status] || '#94a3b8';
 
             // Update Manual Control Button States
