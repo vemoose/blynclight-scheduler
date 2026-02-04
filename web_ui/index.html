@@ -957,14 +957,20 @@
             const liveConfig = await r.json();
 
             const now = new Date();
-            const timeStr = now.getHours().toString().padStart(2, '0') + ":" + now.getMinutes().toString().padStart(2, '0');
-            const dayStr = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][now.getDay()];
+            // JS getDay(): 0=Sun, 1=Mon, ..., 6=Sat
+            // Our index: 0=Mon, 1=Tue, ..., 6=Sun
+            const jsDay = now.getDay();
+            const dayIndex = (jsDay === 0) ? 6 : jsDay - 1;
+            const dayStr = DAYS[dayIndex];
 
-            let status = liveConfig.default_state || config.default_state;
+            const timeStr = now.getHours().toString().padStart(2, '0') + ":" +
+                now.getMinutes().toString().padStart(2, '0');
+
+            let status = config.default_state || "away";
             let isManual = false;
 
             const mv = liveConfig.manual_override;
-            if (mv && mv.toLowerCase() !== "none" && mv.toLowerCase() !== "null") {
+            if (mv && mv !== "none" && mv !== "null") {
                 status = mv;
                 isManual = true;
             } else {

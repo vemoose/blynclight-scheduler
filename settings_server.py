@@ -72,8 +72,26 @@ class SettingsHandler(http.server.SimpleHTTPRequestHandler):
         elif self.path == "/force":
             state = data.get("state")
             config_store.reload()
-            config_store.config["manual_override"] = state
-            config_store.save_config()
+            config_store.set("manual_override", state)
+
+        elif self.path == "/_health": # Changed from /health to /_health
+            # Diagnostic endpoint to see what the Python engine thinks
+            import datetime
+            engine = settings_server_engine # using a global assigned in start_settings_ui
+            now = datetime.datetime.now()
+            status = engine.get_desired_status(now)
+            health = {
+                "python_time": now.strftime("%H:%M:%S"),
+                "python_day": now.strftime("%a"),
+                "calculated_status": status,
+                "manual_override": config_store.config.get("manual_override"),
+                "rules_count": len(config_store.config.get("rules", []))
+            }
+            self.send_response(200)
+            self.send_header("Content-type", "application/json")
+            self.end_headers()
+            self.wfile.write(json.dumps(health).encode())
+            return
 
         self.send_response(200)
         self.send_header("Content-type", "application/json")
@@ -96,7 +114,14 @@ def run_server():
         # Port might be busy or already running
         pass
 
+# Global for health checks
+settings_server_engine = None
+
 def start_settings_ui():
+    global settings_server_engine
+    import schedule_engine
+    settings_server_engine = schedule_engine.ScheduleEngine(config_store)
+    
     url = f"http://localhost:{PORT}"
     
     # 1. Start Server in background

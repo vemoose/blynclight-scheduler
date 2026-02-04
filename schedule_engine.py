@@ -57,8 +57,9 @@ class ScheduleEngine:
             if not rule.get("enabled", True):
                 continue
                 
-            if current_day in rule.get("days", []):
+            rule_days = [d.lower() for d in rule.get("days", [])]
+            if current_day.lower() in rule_days:
                 if self.is_time_in_range(rule["start"], rule["end"], current_time):
                     final_state = rule["state"]
                     
-        return final_state
+        return final_state.lower()
