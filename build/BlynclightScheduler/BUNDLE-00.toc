@@ -1,3 +1,0 @@
-([('BlynclightScheduler',
-   '/Users/aarondeaville/.gemini/antigravity/scratch/blynclight_scheduler/dist/BlynclightScheduler',
-   'EXECUTABLE')],)
