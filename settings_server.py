@@ -37,11 +37,15 @@ class SettingsHandler(http.server.SimpleHTTPRequestHandler):
             
         if self.path == "/config":
             config_store.reload()
+            full_data = config_store.config.copy()
+            # Include the granular device status object
+            full_data["device_status_obj"] = config_store.get("device_status")
+            
             self.send_response(200)
             self.send_header("Content-type", "application/json")
             self.send_header("Cache-Control", "no-store")
             self.end_headers()
-            self.wfile.write(json.dumps(config_store.config).encode())
+            self.wfile.write(json.dumps(full_data).encode())
         else:
             return super().do_GET()
 

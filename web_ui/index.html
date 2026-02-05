@@ -982,19 +982,27 @@
                 });
             }
 
-            // Update Device Status
-            const devStatus = liveConfig.device_status || "searching";
+            // Update Device Status with diagnostic details
+            const dObj = liveConfig.device_status_obj || { code: "searching", message: "Initializing..." };
             const devTxt = document.getElementById('device-txt');
             const devDot = document.getElementById('device-dot');
+            const devBadge = document.getElementById('device-status');
 
-            if (devStatus === "connected") {
+            devBadge.title = dObj.message || ""; // Show full message on hover
+
+            if (dObj.code === "connected") {
                 devTxt.innerText = "Device connected";
                 devDot.style.background = "#10b981";
-            } else if (devStatus === "not_detected") {
-                devTxt.innerText = "Device not detected";
+            } else if (dObj.code === "error") {
+                devTxt.innerText = "Hardware issue";
                 devDot.style.background = "#ef4444";
+                devBadge.style.borderColor = "#fee2e2";
+                devBadge.style.background = "#fff1f1";
+            } else if (dObj.code === "not_detected") {
+                devTxt.innerText = "Status: Virtual Mode";
+                devDot.style.background = "#94a3b8";
             } else {
-                devTxt.innerText = "Connecting / issue";
+                devTxt.innerText = "Searching...";
                 devDot.style.background = "#f59e0b";
             }
 
