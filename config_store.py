@@ -25,9 +25,11 @@ class ConfigStore:
         self.config_dir = Path.home() / ".blynclight_scheduler"
         self.config_dir.mkdir(exist_ok=True)
         self.config_path = self.config_dir / config_name
+        self.status_path = self.config_dir / "status.json"
         self.log_path = self.config_dir / "app.log"
         self.last_mtime = 0
-        self.runtime_status = {} # In-memory only!
+        self.last_status_mtime = 0
+        self.runtime_status = {} 
         self.config = self.load_config()
 
     def load_config(self):
@@ -66,24 +68,48 @@ class ConfigStore:
             logging.error(f"Failed to save config: {e}")
 
     def get(self, key, default=None):
-        # Check runtime-only memory first (for device status)
+        # 1. Check current runtime memory
         if key in self.runtime_status:
             return self.runtime_status[key]
             
+        # 2. Check the dedicated status file (cross-process sync)
+        if key == "device_status":
+            self._reload_status_file()
+            return self.runtime_status.get("device_status", "searching")
+
         self.reload()
         return self.config.get(key, default)
 
     def set(self, key, value):
-        # Don't save transient device status to disk!
-        # This prevents the 'sharing violation' file-lock on startup
-        if key in ["device_status", "last_polling_time"]:
-            self.runtime_status[key] = value
+        # 1. Device status goes to dedicated status file to avoid locking config.json
+        if key == "device_status":
+            if self.runtime_status.get(key) != value:
+                self.runtime_status[key] = value
+                self._save_status_file()
             return
 
-        self.reload() # Get latest before applying
+        # 2. Regular settings
+        self.reload()
         if self.config.get(key) != value:
             self.config[key] = value
             self.save_config()
+
+    def _reload_status_file(self):
+        if not self.status_path.exists(): return
+        try:
+            mtime = os.path.getmtime(self.status_path)
+            if mtime > self.last_status_mtime:
+                with open(self.status_path, 'r') as f:
+                    self.runtime_status.update(json.load(f))
+                self.last_status_mtime = mtime
+        except: pass
+
+    def _save_status_file(self):
+        try:
+            with open(self.status_path, 'w') as f:
+                json.dump(self.runtime_status, f)
+            self.last_status_mtime = os.path.getmtime(self.status_path)
+        except: pass
 
     def reload(self):
         if not self.config_path.exists():
