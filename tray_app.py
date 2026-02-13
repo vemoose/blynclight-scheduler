@@ -177,20 +177,12 @@ class TrayApp:
     def main_loop(self):
         logging.info("Starting optimized schedule main loop")
         self.device_manager.connect()
-        
         while self.running:
             try:
                 self.update_light()
             except Exception as e:
                 logging.error(f"Error in main loop: {e}")
-                
-            # Aggressive polling for the first minute of startup (every 1s)
-            # Then settle into configured poll time
-            is_startup = (time.time() - self.startup_time) < 60
-            
-            poll_time = self.config_store.config.get("poll_seconds", 2)
-            sleep_duration = 1 if (is_startup or self.first_run) else max(1, poll_time)
-            time.sleep(sleep_duration)
+            time.sleep(1)
 
     def run(self):
         self.setup_tray()

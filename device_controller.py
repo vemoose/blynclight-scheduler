@@ -3,7 +3,7 @@ import time
 from abc import ABC, abstractmethod
 
 try:
-    from blynclight import Blynclight as BlynclightLib
+    from blynclight import BlyncLight as BlynclightLib
 except ImportError:
     BlynclightLib = None
 
@@ -22,6 +22,10 @@ class LightController(ABC):
         pass
 
     @abstractmethod
+    def is_alive(self):
+        pass
+
+    @abstractmethod
     def set_color(self, r, g, b):
         pass
 
@@ -30,103 +34,124 @@ class LightController(ABC):
         pass
 
 class BlynclightController(LightController):
+    """Wrapper for the official blynclight library."""
     def __init__(self):
         self.device = None
 
+    def is_alive(self):
+        if not self.device: return False
+        try:
+            # We check available lights to see if it's still there
+            # This is more reliable than checking properties on the handle
+            if not BlynclightLib: return False
+            return len(BlynclightLib.available_lights()) > 0
+        except Exception:
+            self.device = None
+            return False
+
     def connect(self):
         if not BlynclightLib:
-            logging.error("blynclight library not installed.")
-            return False
+            return False, "Library 'blynclight' not installed."
         try:
-            # The blynclight package usually detects devices automatically
             self.device = BlynclightLib.get_light()
             if self.device:
-                return True, "Success"
-            return False, "No Blynclight hardware detected on USB bus."
+                return True, "Connected via Blynclight Library"
+            return False, "No Blynclight hardware detected."
         except Exception as e:
-            err = str(e)
-            if "Access Denied" in err or "Permission" in err:
-                return False, "Access Denied: Please run as Administrator or check USB permissions."
-            return False, f"Connection failed: {err}"
+            return False, f"Blynclight Error: {str(e)}"
 
     def disconnect(self):
         self.device = None
 
     def set_color(self, r, g, b):
         if not self.device: return False
-        success = False
         try:
-            # Burst send: send 3 times to ensure hardware capture
-            for _ in range(3):
-                self.device.color = (r, g, b)
-            success = True
+            # Ensure the device is 'on' (clears the off bit)
+            self.device.on = True
+            # Set the color tuple (Swapping B and G because library internal order is R, B, G)
+            self.device.color = (r, b, g)
+            # FORCE update because library's .color setter doesn't flush automatically
+            self.device.update(force=True)
+            return True
         except Exception as e:
-            logging.error(f"Blynclight burst-send failed: {e}")
-            self.disconnect() # Force full reset on next attempt
-        return success
+            logging.error(f"Blynclight library set_color failed: {e}")
+            self.disconnect()
+            return False
 
     def turn_off(self):
         if self.device:
             try:
                 self.device.on = False
                 return True
-            except Exception as e:
-                logging.error(f"Failed to turn off via Blynclight: {e}")
-                self.device = None
+            except Exception:
+                self.disconnect()
         return False
 
 class HIDFallbackController(LightController):
-    # Standard Embrava Blynclight VIDs/PIDs
+    """Direct HID implementation for maximum reliability."""
     VID = 0x2C0D
-    PID_8 = 0x0001 # Blynclight Standard
-    PID_16 = 0x0002 # Blynclight Lync
     
     def __init__(self):
         self.device = None
+        self.device_path = None
+
+    def is_alive(self):
+        if not self.device: return False
+        try:
+            if not hid: return False
+            devices = hid.enumerate(self.VID)
+            return any(d['path'] == self.device_path for d in devices)
+        except Exception:
+            self.device = None
+            return False
 
     def connect(self):
         if not hid:
-            logging.error("hidapi (hid) library not installed.")
-            return False
+            return False, "Library 'hidapi' not installed."
         try:
             devices = hid.enumerate(self.VID)
             if not devices:
-                return False, "No HID devices with matching Vendor ID found."
-            for d in devices:
-                self.device = hid.device()
-                self.device.open_path(d['path'])
-                return True, f"Connected to {d.get('product_string', 'Blynclight')}"
+                return False, "No Blynclight hardware found on USB."
+            
+            # Use the first one found
+            d = devices[0]
+            self.device = hid.device()
+            self.device.open_path(d['path'])
+            self.device_path = d['path']
+            product = d.get('product_string', 'Blynclight')
+            return True, f"Connected to {product} (Direct HID)"
         except Exception as e:
-            err = str(e)
-            if "Access Denied" in err:
-                return False, "USB Access Denied. Another app might be using the light."
-            return False, f"HID Error: {err}"
-        return False, "Unknown HID discovery error."
+            return False, f"HID Connection Error: {str(e)}"
 
     def disconnect(self):
         if self.device:
-            self.device.close()
+            try:
+                self.device.close()
+            except: pass
             self.device = None
+        self.device_path = None
 
     def set_color(self, r, g, b):
         if not self.device: return False
         try:
-            # Pattern A: Standard Blynclight (Red, Blue, Green, Intensity, Command)
-            # Pattern B: Legacy/Alternative Protocol
-            # We send both in a burst to ensure coverage across all firmware versions
-            patterns = [
-                [0x00, r, b, g, 0xFF, 0x00, 0x00, 0x00, 0x00], # Standard
-                [0x00, r, g, b, 0xFF, 0x01, 0x00, 0x00, 0x00]  # Alt Command/Order
-            ]
+            # Control Byte (Byte 4):
+            # Bit 0: Off
+            # Bit 1: Dim
+            # Bit 2: Flash
+            # Bits 3-5: Speed (1, 2, 4)
+            # Default "On" with Speed 1: 0x08
             
-            for _ in range(2): # Double burst
-                for p in patterns:
-                    self.device.write(p)
-                time.sleep(0.05)
+            patterns = [
+                [0x00, r, b, g, 0x08, 0x00, 0x00, 0x00, 0x00], # Standard RBG
+                [0x00, r, b, g, 0x00, 0x00, 0x00, 0x00, 0x05], # Plus Variant RBG
+                [0x00, r, b, g, 0xFF, 0x00, 0x00, 0x00, 0x09]  # Extended Plus RBG
+            ]
+            for p in patterns:
+                self.device.write(p)
             return True
         except Exception as e:
-            logging.error(f"HID burst sync error: {e}")
-            self.disconnect() # Force re-enumeration
+            logging.error(f"HID write failed: {e}")
+            self.disconnect()
             return False
 
     def turn_off(self):
@@ -136,102 +161,101 @@ class SimulatedController(LightController):
     def __init__(self, on_color_change=None):
         self.on_color_change = on_color_change
         self.connected = False
-        self.current_color = (0, 0, 0)
+
+    def is_alive(self):
+        return True
 
     def connect(self):
         self.connected = True
-        logging.info("Connected to Simulated Blynclight")
-        return True
+        return True, "Simulated Mode Active"
 
     def disconnect(self):
         self.connected = False
 
     def set_color(self, r, g, b):
-        self.current_color = (r, g, b)
-        color_name = self._get_color_name(r, g, b)
-        logging.info(f"SIMULATOR: Light color set to {color_name} ({r}, {g}, {b})")
         if self.on_color_change:
-            self.on_color_change(color_name)
+            self.on_color_change(f"rgb({r},{g},{b})")
         return True
 
     def turn_off(self):
-        self.current_color = (0, 0, 0)
-        logging.info("SIMULATOR: Light turned OFF")
         if self.on_color_change:
             self.on_color_change("off")
         return True
-
-    def _get_color_name(self, r, g, b):
-        if r > 200 and g < 50 and b < 50: return "red"
-        if g > 200 and r < 50 and b < 50: return "green"
-        if b > 200 and r < 50 and g < 50: return "blue"
-        if r == 0 and g == 0 and b == 0: return "off"
-        return f"rgb({r},{g},{b})"
 
 class DeviceManager:
     def __init__(self, config):
         self.config = config
         self.controller = None
         self.simulated_mode = False
-        self.on_sim_color_change = None # Callback for UI update
-        self.connection_status = "searching"
+        self.on_sim_color_change = None
+        
+        # Internal status state
+        self.connection_status = {
+            "code": "searching",
+            "message": "Initializing...",
+            "timestamp": time.time()
+        }
         
         self.available_controllers = [
-            BlynclightController(),
-            HIDFallbackController()
+            BlynclightController(), # Try library first
+            HIDFallbackController()  # Fallback to direct HID
         ]
 
     def connect(self):
-        # Try real controllers first
+        """Force a full hardware re-scan and update internal status."""
         for ctrl in self.available_controllers:
             success, message = ctrl.connect()
             if success:
                 self.controller = ctrl
                 self.simulated_mode = False
-                self.connection_status = {
-                    "code": "connected",
-                    "message": message,
-                    "timestamp": time.time()
-                }
+                self._update_status("connected", message)
                 return True
-            else:
-                # Store the last "real" reason it failed
-                if "No Blynclight" not in message:
-                    self.connection_status = {
-                        "code": "error",
-                        "message": message,
-                        "timestamp": time.time()
-                    }
         
-        # Fallback to Simulator if no real device was found
-        if self.connection_status == "searching" or self.connection_status.get("code") == "searching":
-             self.connection_status = {"code": "not_detected", "message": "No physical light found. Rules will run in dashboard only.", "timestamp": time.time()}
-             
+        # Fallback to simulation
         self.controller = SimulatedController(on_color_change=self.on_sim_color_change)
         self.controller.connect()
         self.simulated_mode = True
+        self._update_status("not_detected", "No physical light found. Virtual Mode active.")
         return True
 
+    def _update_status(self, code, message):
+        """Internal helper to update status only when it actually changes."""
+        if self.connection_status.get("code") != code or self.connection_status.get("message") != message:
+            self.connection_status = {
+                "code": code,
+                "message": message,
+                "timestamp": time.time()
+            }
+            logging.info(f"Connection Status Change: {code} - {message}")
+
     def get_connection_status(self):
+        """Check hardware health and return the current status."""
+        # 1. If we are supposed to be on hardware, check if it's still alive
+        if self.controller and not self.simulated_mode:
+            if not self.controller.is_alive():
+                logging.info("Hardware disconnected detected.")
+                self.connect()
+        
+        # 2. If we are in virtual mode, try to find hardware occasionally
+        elif self.simulated_mode:
+            # Poll every 2 seconds for new hardware
+            if time.time() - self.connection_status.get("timestamp", 0) > 2:
+                self.connect()
+
         return self.connection_status
 
     def is_connected(self):
-        return self.controller is not None
+        return self.controller is not None and not self.simulated_mode
 
     def set_color(self, r, g, b):
-        # Proactive: If we're not connected, try one-time aggressive search
         if not self.controller:
             self.connect()
-
+        
         if self.controller:
-            # Attempt update
             if not self.controller.set_color(r, g, b):
-                logging.warning("Hardware command dropped. Initializing full USB reset...")
-                time.sleep(0.5)
-                if self.connect(): # Full reconnect
+                # If command failed, re-connect and retry once
+                if self.connect():
                     self.controller.set_color(r, g, b)
-        else:
-            logging.debug("Device unreachable. Scheduler remains active in memory.")
 
     def turn_off(self):
         if self.controller:

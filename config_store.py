@@ -68,15 +68,12 @@ class ConfigStore:
             logging.error(f"Failed to save config: {e}")
 
     def get(self, key, default=None):
-        # 1. Check current runtime memory
-        if key in self.runtime_status:
-            return self.runtime_status[key]
-            
-        # 2. Check the dedicated status file (cross-process sync)
+        # 1. Device status requires cross-process sync from status.json
         if key == "device_status":
             self._reload_status_file()
             return self.runtime_status.get("device_status", "searching")
 
+        # 2. Regular settings reload from config.json
         self.reload()
         return self.config.get(key, default)
 
@@ -127,6 +124,7 @@ class ConfigStore:
             level=logging.DEBUG,
             format='%(asctime)s - %(levelname)s - %(message)s',
             handlers=[
-                logging.StreamHandler()
+                logging.StreamHandler(),
+                logging.FileHandler(self.log_path)
             ]
         )
