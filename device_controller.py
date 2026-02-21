@@ -1,6 +1,14 @@
+import collections
+import sys
 import logging
 import time
 from abc import ABC, abstractmethod
+
+# Monkeypatch collections for Python 3.10+ compatibility (required for blynclight library)
+if not hasattr(collections, 'Sequence'):
+    import collections.abc
+    collections.Sequence = collections.abc.Sequence
+    sys.modules['collections.Sequence'] = collections.abc.Sequence
 
 try:
     from blynclight import BlyncLight as BlynclightLib
@@ -66,11 +74,11 @@ class BlynclightController(LightController):
     def set_color(self, r, g, b):
         if not self.device: return False
         try:
-            # Ensure the device is 'on' (clears the off bit)
+            # Ensure the device is 'on'
             self.device.on = True
             # Set the color tuple (Swapping B and G because library internal order is R, B, G)
             self.device.color = (r, b, g)
-            # FORCE update because library's .color setter doesn't flush automatically
+            # Force update
             self.device.update(force=True)
             return True
         except Exception as e:
@@ -118,8 +126,8 @@ class HIDFallbackController(LightController):
             self.device = hid.device()
             self.device.open_path(d['path'])
             self.device_path = d['path']
-            product = d.get('product_string', 'Blynclight')
-            return True, f"Connected to {product} (Direct HID)"
+            self.product_name = d.get('product_string', 'Blynclight')
+            return True, f"Connected to {self.product_name} (Direct HID)"
         except Exception as e:
             return False, f"HID Connection Error: {str(e)}"
 
@@ -134,20 +142,20 @@ class HIDFallbackController(LightController):
     def set_color(self, r, g, b):
         if not self.device: return False
         try:
-            # Control Byte (Byte 4):
-            # Bit 0: Off
-            # Bit 1: Dim
-            # Bit 2: Flash
-            # Bits 3-5: Speed (1, 2, 4)
-            # Default "On" with Speed 1: 0x08
+            # Byte 4 is Control: 0x08 = On (Speed 1), 0x00 = Off/Reset
+            # Byte 8 is Model Variant: 0x05 = Plus, 0x00 = Standard
             
-            patterns = [
-                [0x00, r, b, g, 0x08, 0x00, 0x00, 0x00, 0x00], # Standard RBG
-                [0x00, r, b, g, 0x00, 0x00, 0x00, 0x00, 0x05], # Plus Variant RBG
-                [0x00, r, b, g, 0xFF, 0x00, 0x00, 0x00, 0x09]  # Extended Plus RBG
-            ]
-            for p in patterns:
-                self.device.write(p)
+            # We determine the variant based on the product string acquired during connect
+            is_plus = "Plus" in (getattr(self, 'product_name', '') or '')
+            
+            if is_plus:
+                # Blynclight Plus expects RBG order with 0x05 at the end
+                pattern = [0x00, r, b, g, 0x00, 0x00, 0x00, 0x00, 0x05]
+            else:
+                # Standard Blynclights usually expect RBG with 0x08 in control byte
+                pattern = [0x00, r, b, g, 0x08, 0x00, 0x00, 0x00, 0x00]
+            
+            self.device.write(pattern)
             return True
         except Exception as e:
             logging.error(f"HID write failed: {e}")
