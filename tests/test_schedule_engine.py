@@ -7,6 +7,8 @@ class MockConfig:
         self.config = config
     def get(self, key, default=None):
         return self.config.get(key, default)
+    def reload(self):
+        pass
 
 def test_default_state():
     config = MockConfig({"default_state": "away", "rules": []})

@@ -158,14 +158,18 @@ class TrayApp:
         desired_status = self.schedule_engine.get_desired_status()
         
         # 3. Update hardware and icons ONLY on actual transition
-        # (Force update on first run to ensure sync)
-        if desired_status != self.last_status or self.first_run:
-            logging.info(f"Syncing State: {self.last_status} -> {desired_status}")
+        # (Force update on first run or if hardware just reconnected to ensure sync)
+        if desired_status != self.last_status or self.first_run or getattr(self.device_manager, 'needs_sync', False):
+            logging.info(f"Syncing State: {self.last_status} -> {desired_status} (Sync Reason: {'Transition' if desired_status != self.last_status else 'Initial/Reconnect'})")
             self.device_manager.set_status_color(desired_status)
             self.last_status = desired_status
             if self.icon:
                 self.icon.icon = self.create_image(desired_status)
             self.first_run = False
+            
+            # Reset sync flag after push
+            if hasattr(self.device_manager, 'needs_sync'):
+                self.device_manager.needs_sync = False
         
         # 4. Refresh menu context ONLY if override mode switched
         if current_override != self.last_override:

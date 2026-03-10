@@ -204,6 +204,8 @@ class DeviceManager:
             "timestamp": time.time()
         }
         
+        self.needs_sync = False # Indicates hardware needs an initial push
+        
         self.available_controllers = [
             BlynclightController(), # Try library first
             HIDFallbackController()  # Fallback to direct HID
@@ -216,6 +218,7 @@ class DeviceManager:
             if success:
                 self.controller = ctrl
                 self.simulated_mode = False
+                self.needs_sync = True # Force sync on fresh hardware connection
                 self._update_status("connected", message)
                 return True
         
